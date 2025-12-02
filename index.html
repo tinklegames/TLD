@@ -25,7 +25,6 @@
       height: 100%;
     }
 
-    /* simple loading spinner just in case */
     .spinner {
       width: 32px;
       height: 32px;
@@ -39,6 +38,76 @@
       to { transform: rotate(360deg); }
     }
   </style>
+
+  <!-- 🔹 Stub Yandex SDK globals so Unity's plugin doesn't crash -->
+  <script>
+    (function () {
+      function createStubYsdk() {
+        const ua = navigator.userAgent || "";
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(ua);
+
+        return {
+          environment: {
+            i18n: {
+              lang: "en",     // 👈 force English
+              tld:  "com"
+            },
+            app: {
+              id: "TheLongDrive"
+            },
+            browser: {
+              lang: navigator.language || "en"
+            },
+            payload: null
+          },
+          deviceInfo: {
+            type: isMobile ? "mobile" : "desktop",
+            isMobile: () => isMobile,
+            isDesktop: () => !isMobile,
+            isTablet: () => false,
+            isTV: () => false
+          },
+          adv: {
+            showFullscreenAdv: () => {
+              console.log("[ysdk stub] showFullscreenAdv");
+              return Promise.resolve();
+            },
+            showRewardedVideo: () => {
+              console.log("[ysdk stub] showRewardedVideo");
+              return Promise.resolve();
+            }
+          },
+          feedback: {
+            canReview: () => Promise.resolve({ value: false, reason: "stub" }),
+            requestReview: () => Promise.resolve({ feedbackSent: false })
+          },
+          features: {
+            GamesAPI: {
+              getAllGames: () => Promise.reject("stub: no games api")
+            }
+          },
+          getPayments: () => Promise.reject("stub: no payments"),
+          getPlayer: () => Promise.reject("stub: no player"),
+          getStorage: () => Promise.resolve({
+            setItem: () => Promise.resolve(),
+            getItem: () => Promise.resolve(null),
+            removeItem: () => Promise.resolve()
+          })
+        };
+      }
+
+      // global ysdk that LangRequest_js is trying to use
+      window.ysdk = createStubYsdk();
+
+      // optional: if something still calls YaGames.init, make it just return our stub
+      window.YaGames = {
+        init: function () {
+          console.log("[YaGames stub] init called");
+          return Promise.resolve(window.ysdk);
+        }
+      };
+    })();
+  </script>
 </head>
 <body class="dark">
   <div id="unity-container" class="unity-desktop">
@@ -81,15 +150,12 @@
     let initGame = false;
     const NO_DATA = "no data";
 
-    // Basic mobile flag
     if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
       container.className = "unity-mobile";
     }
 
-    // Show loading UI
     loadingCover.style.display = "";
 
-    // Disable context menu & keep canvas focused
     document.addEventListener("contextmenu", (event) => event.preventDefault());
     function FocusGame() {
       window.focus();
@@ -98,7 +164,6 @@
     window.addEventListener("pointerdown", FocusGame);
     window.addEventListener("touchstart", FocusGame);
 
-    // Visibility change: just tell Unity whether the window has focus
     document.addEventListener("visibilitychange", function () {
       if (!ygGameInstance) return;
 
@@ -109,7 +174,6 @@
       }
     });
 
-    // Unity loader
     const script = document.createElement("script");
     script.src = loaderUrl;
     script.onload = () => {
@@ -129,13 +193,11 @@
         });
       };
 
-      // Always start once loader is ready
       StartUnityInstance();
     };
 
     document.body.appendChild(script);
 
-    // Bridge from JS to Unity ("YG2Instance" object inside Unity)
     function YG2Instance(method, arg) {
       if (!ygGameInstance) return;
 
@@ -162,32 +224,23 @@
       console.log("%c" + msg, "color: #FFDF73; background-color: #454545");
     }
 
-    // Called from Unity when its side is ready
     function InitGame() {
       initGame = true;
-
-      // If you want to auto-open an interstitial when game starts,
-      // you can call InterAdvShowStub() here later.
       setTimeout(function () {
-        // Example: if you had a flag to open an inter ad, you could notify Unity
-        // YG2Instance("OpenInterAdv");
+        // hook for any "open inter ad" behaviour if you want later
       }, 100);
     }
 
-    // --- STUBS FOR OLD YANDEX-RELATED FUNCTIONS ---
-    // These keep Unity happy but don't use any SDK or network.
+    // --- STUBS (same as before, unchanged) ---
 
-    LogStyledMessage("PluginYG2 stub (no Yandex SDK)");
+    LogStyledMessage("PluginYG2 stub (no real Yandex SDK)");
 
     function RewardedAdvShow(id) {
-      // Fake a quick rewarded ad lifecycle
       try {
         LogStyledMessage("RewardedAdvShow stub: " + id);
         YG2Instance("OpenRewardedAdv");
         setTimeout(() => {
-          // Grant reward
           YG2Instance("RewardAdv", id);
-          // Close
           YG2Instance("CloseRewardedAdv");
           FocusGame();
         }, 500);
@@ -198,23 +251,19 @@
     }
 
     function InitReview() {
-      // No review system; report "false"
       return Promise.resolve("false");
     }
 
     function Review() {
       LogStyledMessage("Review stub called");
-      // Tell Unity review was not sent
       YG2Instance("ReviewSent", "false");
       FocusGame();
     }
 
-    // Stats stubs
     let statsSaves = NO_DATA;
     let statsStore = {};
 
     function SetState(key, value) {
-      // Store in local JS only
       statsStore[key] = (statsStore[key] || 0) + value;
       LogStyledMessage("SetState stub: " + key + " -> " + statsStore[key]);
     }
@@ -244,7 +293,6 @@
       }
     }
 
-    // Payments stubs
     let paymentsData = NO_DATA;
 
     function InitPayments() {
@@ -257,7 +305,6 @@
 
     function BuyPayments(id) {
       LogStyledMessage("BuyPayments stub: " + id);
-      // Simulate failed purchase
       YG2Instance("OnPurchaseFailed", id);
       FocusGame();
     }
@@ -271,10 +318,8 @@
 
     function ConsumePurchases(onPurchaseSuccess) {
       LogStyledMessage("ConsumePurchases stub");
-      // Nothing to consume
     }
 
-    // Games list stub
     let allGamesData = NO_DATA;
 
     function GetAllGames() {
@@ -284,7 +329,6 @@
       });
     }
 
-    // Interstitial ad stub
     let nowFullAdOpen = false;
 
     function InterAdvShow() {
@@ -305,7 +349,6 @@
       }
     }
 
-    // Environment data stub
     let environmentData = NO_DATA;
 
     function RequestingEnvironmentData() {
